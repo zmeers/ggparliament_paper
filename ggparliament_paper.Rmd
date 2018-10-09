@@ -8,11 +8,16 @@ output:
   latex_engine: xelatex
   df_print: kable
 header-includes:
-- \usepackage{booktabs}
 - \usepackage{setspace}\doublespacing
+- \usepackage{float}
+- \floatplacement{figure}{H}
 fontsize: 12pt
+fontfamily: fourier
 citecolor: pink
 bibliography: ggparliament.bib
+tags: [data visualization, R, visualization in political science]
+abstract: | 
+  I introduce a new `R` package to visualize election results and roll call data using "parliament plots", which allow users to visualize legislatures in a variety of architectural styles. The `R` package is written as a `ggplot2` extension and uses a syntax familiar to many political scientists. I demonstrate the effectiveness of visualizing legislatures in clarifying descriptive data in political science. Word count: 3,245
 ---
 
 ```{r, include=FALSE}
@@ -24,11 +29,10 @@ knitr::opts_chunk$set(echo = FALSE,
                       fig.height = 4,
                       cache = FALSE,
                       fig.align = "center",
-                      fig.pos = 'H',
                       knitr.table.format = "latex")
 library(tidyverse)
 library(ggparliament)
-library(ussc)
+library(geofacet)
 library(patchwork)
 library(knitr)
 library(png)
@@ -38,23 +42,25 @@ library(grid)
 
 # Introduction
 
-In this article, I introduce a new data visualization tool in `R` for graphing legislatures. This `R` package, `ggparliament`, allows for easy visualization of legislatures, including district-level descriptive data, election results; in addition, it can be used to analyse the structure and design of political institutions [@ggparliament].  Graphing legislatures and parliaments provide information that may be easy to miss in tabular form but nearly impossible to miss visually. `ggparliament` is a `ggplot2` [@R-ggplot2] extension that takes aggregate election returns, expands the rows of the data frame to the number of individual seats in the legislature, and plots the parliament according to a specified parliament layout. Such graphs are known as parliament plots. 
+In this article, I introduce a new data visualization tool for plotting legislatures in `R`. This `R` package, `ggparliament`, allows for easy visualization of legislatures, including district-level descriptive data, information on legislators, and election results; in addition, it visualizes the structure and design of political institutions [@ggparliament]. `ggparliament` is a `ggplot2` [@R-ggplot2] extension that takes aggregate election returns, expands the length the data frame to the total number of seats in the legislature, and plots the parliament according to a specified layout. Such graphs are known as parliament plots. 
 
-Visualizing legislatures can be challenging. Users must find the x and y coordinates for each individual seat, and plot the points on a coordinate plane. While this task is not impossible, parliament plots are cubersome to create in most statistical software packages. Until relatively recently, parliament plots were plotted using various JavaScript frameworks. Programs such as 'd3-parliament' [@d3-parliament], 'Parliament SVG' [@parliament-svg] and 'Westminster SVG' [@westminster-svg] give the end-user greater freedom to draw directly on the Document Object Model^[In common parlance, an empty webpage.] using Scalable Vector Graphics (SVG). Click-and-point options also exist for non-programmers, including 'Parliament Diagram' [@parliamentdiagram] which is primarily used for writing Wikipedia articles. These tools, while excellent, are not particularly appropriate or useful choices for political scientists.^['D3.js' and other 'JavaScript' frameworks are more often used by front end web developers, not academics. Likewise, Wikipedia charts do not fit well with the workflow of the modal political scientist.] `ggparliament` seamlessly integrates into the quantitative political scientist's toolkit and allows for easy composition of legislatures using `ggplot2` syntax in the `tidyverse` [@R-tidyverse], a set of packages driven by an opinionated data science philosophy in `R`.
+Visualizing legislatures can be challenging. Users must find coordinate points for a given seat in the chamber and then plot the points on a x-y plane. While this task is not impossible, parliament plots are cubersome to create in most statistical software packages. Until relatively recently, parliament plots were created in various JavaScript frameworks which give the end-user greater freedom to draw directly on the Document Object Model^[In common parlance, an empty webpage.] using Scalable Vector Graphics [@d3-parliament; @parliament-svg; @westminster-svg]. These tools, while excellent, are not particularly appropriate or useful choices for political scientists.^[D3.js and other JavaScript frameworks are more often used by front end web developers, not academics.] `ggparliament` seamlessly integrates into the quantitative political scientist's toolkit and allows for easy composition of legislatures using `ggplot2` syntax in the `tidyverse`, a set of packages driven by an opinionated data science philosophy in `R`.
 
 To highlight the utility of `ggparliament` in political science, I first situate this `R` package in the context of other data visualization tools used in the discipline. I then show how to visualize parliament plots. Finally, I expand on several cases in which `ggparliament` may improve comprehension of descriptive data in political science.  
 
 # Literature review
 
-Data visualization in political science is not new. Several scholars have encouraged use of graphs vis-à-vis tables in communicating scientific research [@king2000making; @tomz2003clarify]. Kastellec and Leoni follow up on this effort several years later, proposing ways to graph statistical results in political science that would otherwise be presented as a table [@KastellecLeoni]. Others have written fairly extensively on graphics and presenting information in political science and in statistics [@gelman2011tables]. Visualizing data has increased in popularity in the social sciences as computational tools become more accessible. Political scientists, like Edward Tufte, are prolific data visualizers, having transformed how political scientists visualize information [@tufte1983visual].
+Data visualization in political science is not new. Scholars have long encouraged use of graphs in communicating quantitative empirical research [@king2000making;  @gelman2002let; @gelman2011tables; @gelman2013infovis]. Kastellec and Leoni [-@KastellecLeoni] follow up on this early effort several years later, proposing ways to graph statistical results that would otherwise be presented in tabular format. Political scientists, such as Edward Tufte, are prolific data visualizers, having helped transform the field of data visualization [see @tufte1974data; @tufte1983visual; @tufte1990envisioning].
 
-Yet, while statistical research computing in political science has increased in use since the 1970s [see @SPSS, @Stata, @Stan, @pscl, @quanteda, @amelia, @stm for examples of statistical computing languages or developments made for and by social scientists.], data visualization tools still remain the domain expertise of people in computational statistics and/or Human Computer Interaction. Specialist data visualization tools in political science are rare. However, there are a few noteable data visualization achievements that originate from political science, including small multiples [@tufte1990envisioning], marginal effects plots [@brambor2006understanding; @hainmueller2018much; @pepinsky2018visual] and the separation plot [@greenhill2011separation].
+Yet while statistical and scientific computing in political science has increased alongside the quantification of political science research since the 1960s, visualization tools still remain the domain expertise of computational statisticians and, to a lesser extent, data scientists. Specialist data visualization `R` packages in political science are rare. However, there are a few noteable data visualization achievements that originate from political science, including small multiples [@tufte1990envisioning], marginal effects plots [@brambor2006understanding; @hainmueller2018much; @pepinsky] and the separation plot [@greenhill2011separation]. My analysis shows that visualizing data has only increased in popularity in the social sciences as computational tools become more accessible. 
 
 # Data visualization in political science 
 
-An analysis of journal articles from the *American Journal of Political Science*, *American Political Science Review*,  *Journal of Politics*, and *Political Analysis* published in 2018 show that the inclusion of figures and graphs are common-place in political science.
+Following up from Kastellec and Leoni's effort to document the number of graphs and tables in political science journals [-@KastellecLeoni], I count the number of graphs (excluding tables and other figures such as causal diagrams and maps) that appeared in the *American Journal of Political Science*, *American Political Science Review*,  *The Journal of Politics* and *Political Analysis* from January to July 2018. 
 
-```{r, fig.height = 4, fig.width= 8, fig.cap="Political science and data visualization", fig.pos = "h"}
+I find that of the 173 articles published during that time period, 131 have graphs; 42 do not. 
+
+```{r, fig.height = 4, fig.width= 8, fig.cap="Political science and data visualization", fig.pos = "h", dpi = 300}
 graph_style <- data.frame(
   year = c(2018),
   journal = c("AJPS", "JOP", "APSR", "PA"),
@@ -66,7 +72,6 @@ graph_style_long <- graph_style %>%
   gather(-journal, -year, ggplot2, other, none) %>% 
   rename('type' = '-journal', 'count' = '-year')
 
-
 a <- ggplot() + 
   geom_bar(data=graph_style_long, aes(x = journal, 
                                       y = count, 
@@ -76,13 +81,13 @@ a <- ggplot() +
            alpha = 0.9) +
   theme_minimal() + 
   scale_fill_viridis_d() + 
-  labs(title='Data visualization styles in\nselect political science journals',
-       subtitle = 'Analysis of articles published in 2018 only.',
+  labs(title='Data visualization styles \nin select political science journals',
        x='', y='Count',
        fill = NULL)  + 
   theme(plot.title = element_text(face = "bold"),
         axis.text.x = element_text(size=10),
         axis.text.y = element_text(size=7))
+
 #ggsave(last_plot(), file = "figure1_datavis.png")
 graph_style_prop <- graph_style %>% 
   dplyr::select(ggplot2, other, none)
@@ -124,15 +129,15 @@ a + b
 #ggsave(journal_analysis, file="figures/journalanalysis_datavis.png",width = 8, height = 4)
 ```
 
+On average, 76 per cent of articles published in those four journals include graphs. The *American Journal of Political Science* has the largest percentage, with more than 2/3 of articles containing graphs. 36 per cent of which are `ggplot2` objects. Graphs are an increasingly popular medium; a decade prior, Kastellec and Leoni found that political scientist overwhelmingly defaulted (by a 2:1 ratio) to tables when communicating empirical results [-@KastellecLeoni]. 
 
-While nearly half of the articles in the four journals do not contain graphs, this is an unsurprising result given that there are subfields or areas of research within subdisciplines in political science in which there is little need to graph results. Of the articles that do contain data visualizations, a significant proportion are made in `ggplot2`. In the *American Journal of Political Science*, 36% of articles published in 2018 include `ggplot2` graphics. 
-
-While `ggplot2` is just one data visualization tool out of many, this analysis provides evidence of the popularity of the `tidyverse` packages in political science. The use of data visualization as a means to communicate results is strongly encouraged in political science. The relative accessibility of tools like `ggplot2` enable social scientists to easily communicate their results graphically. 
+While `ggplot2` is just one data visualization tool out of many, this analysis provides evidence of the popularity of the `tidyverse` packages in political science. The increasing accessibility of tools like `ggplot2` enable social scientists to efficiently communicate results through visualization. Moreover, the use of figures and charts in research has increased substantially over the past decade. 
 
 # Simple Parliament Plots
 
-`ggparliament` is an extension to the `tidyverse`, a subset of packages in `R` which build off a common grammar of graphics and data analysis, enabling users to quickly understand their data through chained functions [@wilkinson2006grammar, @wickham2010layered]. The output can be visualized with ease in `ggplot2`. `ggparliament` is the first data visualization tool in a statistical framework for displaying election returns, party structures, and legislative data in a parliament plot.  `ggparliament` offers five legislative chamber layouts for plotting parliament plots. 
-```{r, fig.width=6, fig.height = 3.5, fig.cap="Basic parliament plots", fig.pos = "h"}
+`ggparliament` is an extension to the `tidyverse`, a subset of packages in `R` which build off a common grammar of graphics and data analysis, enabling users to understand their data through chained functions [@wickham2010layered]. The output can be visualized with ease in `ggplot2`. `ggparliament` is the first data visualization tool in a statistical framework for displaying election returns, party structures, and legislative data in a parliament plot.  The package offers five default legislative chamber layouts for visualizing parliaments (see Figure 2). 
+
+```{r, fig.width=6.5, fig.height = 3.5, fig.cap="Basic parliament plots", fig.pos = "h", dpi = 300}
 # Semicircle
 data <- election_data %>% 
   filter(country == "USA" & year == 2016 & 
@@ -142,8 +147,8 @@ data <- election_data %>%
             party_seats = .$seats,
             type = 'semicircle')
 semicircle <- ggplot(data, aes(x,y), colour = "black") + 
-  geom_parliament_seats(size = 0.5) + 
-  theme_ggparliament() + labs(subtitle = "Semicircle")
+  geom_parliament_seats(size = 0.8) + 
+  theme_ggparliament() + labs(subtitle = "(d) Semicircle")
 
 # Circle
 data <- election_data %>% 
@@ -154,8 +159,8 @@ data <- election_data %>%
             party_seats = .$seats,
             type = 'circle')
 circle <- ggplot(data, aes(x,y), colour = "black") + 
-  geom_parliament_seats(size = 0.5) + 
-  theme_ggparliament() + labs(subtitle = "Circle")
+  geom_parliament_seats(size = 1) + 
+  theme_ggparliament() + labs(subtitle = "(e) Circle")
 
 # Classroom
 data <- election_data %>% 
@@ -165,8 +170,8 @@ data <- election_data %>%
             party_seats = .$seats,
             type = 'classroom')
 classroom <- ggplot(data, aes(x,y), colour = "black") + 
-  geom_parliament_seats(size = 0.5) + 
-  theme_ggparliament() + labs(subtitle = "Classroom")
+  geom_parliament_seats(size = 1) + 
+  theme_ggparliament() + labs(subtitle = "(c) Classroom")
 
 # Horseshoe 
 data <- election_data %>% 
@@ -177,8 +182,8 @@ data <- election_data %>%
             party_seats = .$seats,
             type = 'horseshoe')
 horseshoe <- ggplot(data, aes(x,y), colour = "black") + 
-  geom_parliament_seats(size = 0.5) + 
-  theme_ggparliament() + labs(subtitle = "Horseshoe")
+  geom_parliament_seats(size = 1) + 
+  theme_ggparliament() + labs(subtitle = "(b) Horseshoe")
 
 # Opposing bench
 data <- election_data %>% 
@@ -189,17 +194,17 @@ data <- election_data %>%
             party_seats = .$seats,
             type = 'opposing_benches')
 ob <- ggplot(data, aes(x,y), colour = "black") + 
-  geom_parliament_seats(size = 0.5)  + 
-  theme_ggparliament() + labs(subtitle = "Opposing Benches")
+  geom_parliament_seats(size = 1)  + 
+  theme_ggparliament() + labs(subtitle = "(a) Opposing Benches")
 
 (ob | horseshoe | classroom) / (semicircle | circle | plot_spacer() )
 ```
 
-Simple descriptive statistics such as election results are often best represented in tables. However, I argue that parliament plots do have some utility. Graphs provide a  accurate summmary of the distribution of seats in a legislature. They can be used to visually group parties together when the number of parties exceeds a two-party system or can make explicitly clear the seat swing between two elections. As `ggparliament` provides several parliament layouts, one can create a cross-country comparative analyis. Moreover, parliament plots allow readers to visualize the layout of the legislature. Moving away from the primary intended purpose of plotting election results, `ggparliament` can display information about legislative districts, roll call data, or information about legislators themselves in a compact format.
+Parliament plots provide a accurate summmary of the distribution of seats in a legislature. They visually group parties together, for e.g. when the number of parties exceeds a two-party system.  Faceting over time allows users to see how the visual makeup of the legislature changed between elections. As `ggparliament` provides several parliament layouts, one can create a cross-country comparative analyis. Moreover, parliament plots allow readers to visualize the layout of the legislature. Moving away from the primary intended purpose of plotting election results, `ggparliament` can display information about legislative districts, roll call data, or information about legislators themselves in a relatively compact format.
 
 # The Concept
 
-Constructing a parliament plot starts with aggregate political data. To illustrate how to use `ggparliament`, I take the 115th Congress as an example. As of August 2018, there are 236 Republicans, 193 Democrats and 6 vacant seats in the House of Representatives which are equally divided by the two political parties. The data frame is structured as follows:
+Constructing a parliament plot starts with aggregate political data. To illustrate how to use `ggparliament`, I take the 115th Congress as an example. As of August 2018, there are 236 Republicans, 193 Democrats and 6 vacant seats in the House of Representatives which are equally divided by the two political parties. Start with a data frame structured as follows:
 
 ```{r, echo = FALSE}
 house_of_reps <- data.frame( 
@@ -212,14 +217,15 @@ knitr::kable(house_of_reps, caption = "The United States House of Representative
 
 Next, we input the data frame into `ggparliament::parliament_data()`, defining the parameters of interest: 
 
-* the type of parliament layout (hemicycle, circle, horseshoe, classroom, or oppposing benches)
+* the type of parliament layout (circle, classroom, horseshoe, opposing benches or semicircle)
 
 * the number of rows in the legislative chamber 
 
-* the numerical 'seats' variable which tells `R` the total number of seats per party 
+* a numerical variable which tells `R` the number of seats per party 
 
-* the name of the original aggregate data frame.^[If you are plotting an opposing benches style parliament for the House of Commons, you must add an additional grouping variable to split the two benches.]
+* the name of the original aggregate data frame
 
+* and if plotting a parliament with two opposing benches, a dichotomous variable that will split the legislature in half.
 
 ```{r, echo = FALSE}
 house_of_reps_new <- parliament_data(election_data = house_of_reps,
@@ -230,11 +236,11 @@ house_of_reps_new <- parliament_data(election_data = house_of_reps,
 knitr::kable(head(house_of_reps_new), caption = "`ggparliament::parliament_data()` output")
 ```
 
-The function `parliament_data()` is primarily dependent on two arguments: the number of rows in the legislative chamber and specified layout. The data frame expands to individual rows for any given legislator with x and y coordinates assigned to their seat. The user can then bind other information to the seat by appending new columns to the data. Plotting the output in `ggparliament` leads to the following graph (see Figure 3).
+The function `parliament_data()` is primarily dependent on two arguments: the number of rows in the legislative chamber and specified layout. The data frame expands to an individual row for legislator $i$ sitting in seat $x_i$ with x and y coordinates in accordance to the legislative chamber design and the number of rows (i.e. a semicircle parliament with 4 rows will look a lot different from one with 13 rows). The user is then able to bind additional information to each seat by appending new columns to the data set. Plotting the basic output in `ggparliament` leads to the following graph (see Figure 3).
 
-```{r, fig.width = 3.5, fig.height = 2.5, fig.pos="h", fig.cap="United States House of Representatives parliament plot"}
+```{r, fig.width = 3.5, fig.height = 2.5, fig.pos="h", fig.cap="United States House of Representatives parliament plot", dpi = 300}
 ggplot(data = house_of_reps_new) +
-  geom_parliament_seats(aes(x = x,  y = y, color = party), size = 2) +
+  geom_parliament_seats(aes(x = x,  y = y, color = party), size = 1.8) +
   theme_ggparliament() +
   labs(color = NULL) + 
   theme(legend.position = 'bottom') + 
@@ -244,11 +250,11 @@ ggplot(data = house_of_reps_new) +
 
 # Additional Information
 
-The primary purpose of `ggparliament` is to plot election returns. However, there exists a lot of potential for plotting other types of descriptive political data. We can append additional information to parliament plots, including faceting legislatures over time or pieces of legislation, plotting majority threshold lines, or grouping coalition governments together. 
+The primary purpose of `ggparliament` is to plot election returns. However, there exists a lot of potential for plotting other types of descriptive political data. We deliberately ensured this package is an extension to the `tidyverse` so that we could take advantage of other visualization tools in the ecosystem. One such advantage is this: we are able to facet graphs over time or over pieces of legislation. We can add extraneous information through new layers, such as a majority threshold line or we can bring certain seats to the foreground to add visual emphasis. 
 
-The `tidyverse` facilitates easy matrixing of variables through faceting, which is helpful for analysing change in legislative bodies over time. Note that we can facet the graph by any variable - a good use for `ggparliament` may be plotting roll call votes over a number of legislative sessions - although it is best to facet by a variable in which observations exist for all cases and, in general, faceting temporally makes intuitive sense. In the following example, I plot the House of Commons in the United Kingdom from 2010 to 2017 (see Figure 4). In doing so, it allows us to see the seat swing in the legislature over several election cycles. 
+The `tidyverse` facilitates easy matrixing of variables through faceting. This is particularly useful plotting election returns over a number of elections or for matrixing roll-call votes over a number of legislative sessions. In the following example, I plot the House of Commons in the United Kingdom from 2010 to 2017 (see Figure 4) which allows us to see how parliament evolved over time. 
 
-```{r, fig.height = 5, fig.width = 8, fig.cap = "House of Commons small multiples", fig.pos = "h"}
+```{r, fig.height = 4, fig.width = 8, fig.cap = "House of Commons small multiples", fig.pos = "h", dpi = 300}
 house_of_commons <- election_data %>% 
   filter(country == "UK") %>%
   split(.$year) %>% 
@@ -279,7 +285,7 @@ ggplot(data = house_of_commons,
 ```
 
 
-Another key advantage of `ggparliament` versus presenting descriptive data in a table is that users can collapse or add variables to plot, appending an additional visual layer each time. The parliament plot can be helpful when highlighting coalitions as it adds a visual dimension to the data. To show how visually highlighting seats can appeal, I provide the 2016 election results for the Australian House of Representatives in tabular format below as well as a `ggparliament` object.
+A key advantage of `ggparliament` is the user's ability to append visual layers to their data. The parliament plot can be used to highlight certain parties or parliamentarians. In particular, we introduce a function called `geom_highlight_government()` which highlights the governing party or a coalition of parties. As an example, I provide the 2016 election results for the Australian House of Representatives in tabular format below as well as a `ggparliament` object.
 
 
 ```{r, results='asis'}
@@ -318,10 +324,10 @@ cat(c("\\begin{table}[!htb]
 
 ```
 
-There is nothing *incorrect* about either table. However, a parliament plot highlights members of the coalition in addition to plotting all of the parties that make up the coalition. For the purpose of visually displaying the parties that make up the Australian government compared to the opposition, a *simple* parliament plot provides as much utility as the tables above (i.e. very little -- indeed, a visual drawing of Table 3). However, using visual tools to highlight subsets of the data allow for near-instant comprehension (see Figure 5). We gain the additional information from visually grouping and highlighting the coalition. In doing this, we do not *lose* information about individual parties. 
+For the purpose of visually displaying the parties that make up the Australian government compared to the opposition, a *simple* parliament plot provides as much utility as the tables above (i.e. very little -- indeed, a visual drawing of Table 3). However, using visual tools to highlight subsets of the data allow for near-instant comprehension (see Figure 5). We gain the additional information from visually grouping and highlighting the coalition. In doing this, we do not *lose* information about individual parties. 
 
 
-```{r, fig.width=3.5, fig.height = 3.5, fig.cap = "Highlighting the Coalition government in the Australian House of Representatives", fig.pos = "h"}
+```{r, fig.width=3, fig.height = 3, fig.cap = "Highlighting the Coalition government in the Australian House of Representatives", fig.pos = "h", dpi = 300}
 australia <- election_data %>% 
   filter(country == "Australia" &
            year == 2016 &
@@ -334,10 +340,9 @@ australia <- election_data %>%
 ggplot(data = australia, aes(x = x, y = y, color = party_long)) +
   geom_parliament_seats(size = 1.5) + 
   geom_highlight_government(government == 1, size = 1.5, colour = "pink") +
-  labs(title = "Australian House of Representatives") + 
-  geom_curve(aes(x = 7.5, y = 10, xend = 7, yend = 8), 
-             colour = 'grey', curvature = -0.2,
-             arrow = arrow(length = unit(0.03, "npc"))) +
+  geom_curve(aes(x = 7.3, y = 10, xend = 7, yend = 8), 
+             colour = 'grey', curvature = -0.3,
+             arrow = arrow(length = unit(0.05, "npc"))) +
   annotate("text", x = 7.7, y = 10.2,label = "The Coalition", colour = "pink") + 
   scale_color_manual(values = australia$colour, 
                      limits = australia$party_long) +
@@ -347,16 +352,16 @@ ggplot(data = australia, aes(x = x, y = y, color = party_long)) +
                                title.hjust = 0.5, 
                                nrow = 3,
                                title.position = "top", 
-                               keywidth = 0.5))
+                               keywidth = 0.5,
+                               label.theme = element_text(size = 7)))
 ```
 
 
-
-Another quantity of interest is the absolute majority threshold. We can calculate this by halving the total number of seats in the legislature, rounding to the next integer to reach an absolute majority of seats. The formula for this metric is simply:
+Another quantity of interest is the absolute majority threshold, which we can calculate by halving the total number of seats in the legislature, rounding to the next integer to reach an absolute majority of seats. The formula for this metric is simply:
 $$ Absolute\ majority = \lfloor \frac{seats}{2} \rceil $$
 Graphically, `ggparliament` draws a line through the majority threshold seat, with an optional annotation noting the number of seats required to claim a majority. 
 
-```{r, fig.width = 3.5, fig.height = 2.5, fig.pos="h", fig.cap="United States House of Representatives with a majority threshold line"}
+```{r, fig.width = 3.5, fig.height = 2.5, fig.pos="h", fig.cap="United States House of Representatives with a majority threshold line", dpi = 300}
 ggplot(data = house_of_reps_new) +
   geom_parliament_seats(aes(x = x,  y = y, color = party), 
                         size = 2) +
@@ -371,12 +376,12 @@ ggplot(data = house_of_reps_new) +
                      limits = house_of_reps_new$party)
 ```
 
-Drawing the majority threshold may be of interest when the majority margin is slim. However, it also offers additional advantages in explicitly making clear the difference between the number of seats won by the government versus the bare minimum needed to call the election or vote. 
+Drawing a majority threshold may be of interest when the majority margin is slim. Threshold lines offer additional advantages in explicitly making clear the difference between the number of seats held by a party in control of the legislative chamber compared to the minimal number of seats needed to call an election or to secure a vote. 
 
-The package also comes with several smaller functions. `ggparliament` provides a function to distinguish overhang seats, where the number of national-level party votes exceeds the number of division-level seats won in MMP electoral systems; the excess is allocated to the party to make up the difference. Additionally, the `R` package includes a function to calculate and plot seat share in the legislative body.
+The package also comes with several smaller functions. `ggparliament` distinguishes overhang seats in Mixed Member Proportional electoral systems by drawing hollow circles. Additionally, the `R` package includes functions to calculate and plot the seat share in the legislative body, the total number of seats, and the seat count per party.
 
 
-```{r, fig.width = 6, fig.height = 3, fig.pos = 'h', fig.cap="German Bundestag - 2013 election"}
+```{r, fig.width = 5.5, fig.height= 3, fig.pos = 'h', fig.cap="German Bundestag - 2013 election", dpi = 300}
 data <- election_data %>%
   filter(country == "Germany" & year == "2013") %>% # on the federal level, CSU is a part of CDU
   mutate(seats = gsub("255", "311", seats)) %>% # Add the 56 CSU seats to CDU
@@ -389,11 +394,14 @@ number_overhangseats <- c(3, 61, 3, 60,16, 295, 11, 182)
 # expand data
 german_data <- parliament_data(
   election_data = data,
-  parl_rows = 11,
+  parl_rows = 13,
   party_seats = data$seats,
   type = "semicircle"
 )
-german_data <- german_data %>% mutate(overhang_seats = rep(overhangseats, number_overhangseats))
+german_data <- german_data %>% 
+  mutate(overhang_seats = rep(overhangseats, number_overhangseats))
+
+
 german_parliament <- ggplot(german_data, aes(x,
   y,
   colour = party_short
@@ -403,7 +411,7 @@ german_parliament <- ggplot(german_data, aes(x,
   geom_overhang_seats(overhang_seats == 1) +
   labs(
     colour = NULL,
-    subtitle = "Overhang seats are hollow."
+    caption = "Note: overhang seats are hollow."
   ) +
   theme_void() +
   geom_parliament_bar(colour, party_short) + 
@@ -416,58 +424,30 @@ german_parliament <- ggplot(german_data, aes(x,
                    party_colours = colour,
                    party_names = party_short,
                    party_seats = seats) +
+  draw_totalseats(n = 631, type = 'semicircle') + 
   scale_colour_manual(
     values = german_data$colour,
     limits = german_data$party_short
   )
 german_parliament
+
 ```
 
 
-# Case Studies
+# Applications
 
-I turn to additional examples where `ggparliament` may be a useful descriptive tool for political scientists. In one case study, I replicate an existing diagram of a legislature using `ggparliament`. In the other, I show how a `ggparliament` plot adds to the written description of the data.
-
-## The 115th Congress and Questions of Party Unity in a Polarized Era [@lee2018115th]
-
-Lee argues that despite the Republican majority in Congress and near-uniform party unity, the Republican party in the 115th Congress has been less effective at passing its legislative agenda because of internal party politics [-@lee2018115th]. Given that parties often do not call a vote until a majority is ensured, roll-call data may overstate party cohesion. 
-
-A parliament plot showing Republican party cohesion in the 115th Congress looks like the following.
-
-```{r, fig.width = 4, fig.height = 2.5, fig.pos="h", fig.cap="Party cohesion in the 115th Congress"}
-us_congress <- election_data %>% 
-  filter(country == "USA" &
-           year == "2016" & 
-           house == "Representatives") %>% 
-  parliament_data(election_data = ., 
-                  parl_rows = 8,
-                  party_seats = .$seats,
-                  type = 'semicircle') %>% 
-  mutate(party_cohesion = rep(c(1,0), c(222, 213)))
-
-ggplot(us_congress, aes(x, y, colour = party_long)) + 
-  geom_parliament_seats(size = 2) + 
-  geom_highlight_government(party_cohesion == 1, colour = "grey", size = 2.7) + 
-  draw_majoritythreshold(n = 218, type = 'semicircle', linecolour = 'black', linetype = 1, linesize = 0.5, label = FALSE) +
-  annotate("text", x = - 1.5, y = 2, label = "Mean party \ncohesion: 92%", size = 3) + 
-  scale_color_manual(values = us_congress$colour,
-                     limits = us_congress$party_long) +
-  theme_ggparliament() + 
-  theme(legend.position = 'bottom') + 
-  labs(color = NULL)
-```
-
+I turn to additional examples where `ggparliament` may be a useful descriptive tool for political scientists. In one case study, I replicate an existing diagram of a legislature using `ggparliament`. In the other, I show how `ggparliament` can be used to plot median ideal point estimates in state legislatures. Finally, I use `ggparliament` to visualize descriptive representation in legislatures.
 
 ## Where You Sit is Where You Stand: The Impact of Seating Proximity on Legislative Cue-Taking [@masket2008you]
 
-Masket shows that deskmate pairs in the California legislative assembly vote identically even if they are not ideologically similar [-@masket2008you]. This suggests that vote cue-taking, to some extent, is influenced by the location of fellow legislators. The author provides a diagram which depicts the 1949 California assembly. As evidenced in the figures below, seating was not always partisan. I replicate Masket's figure in `ggparliament` immediately below.
+Masket finds that vote cue-taking can be influenced by geographical location of fellow legislators. Members of the California legislative assembly take cues from those who sit near them, even if they are not members of the same party [-@masket2008you]. The author provides a diagram of the 1949 California assembly. I replicate Masket's figure in `ggparliament` below.
 
-```{r, fig.width = 7, fig.height = 3, fig.pos="h", fig.cap="Figure 1 in Masket (2008)"}
+```{r, fig.width = 8, fig.height = 3, fig.pos="h", fig.cap="Figure 1 in Masket (2008)", dpi = 300}
 img <- readPNG("masket_screenshot.png")
 img <- grid.raster(img)
 ```
 
-```{r, fig.width = 7, fig.height = 4, fig.pos="h", fig.cap="Replication of Figure 1 in Masket (2008)"}
+```{r, fig.width = 7, fig.height = 4, fig.pos="h", fig.cap="Replication of Figure 1 in Masket (2008)",dpi = 300}
 # create dummy data frame for expanding to individual seats
 CA <- data.frame(
   legislator = c("FALSE", "TRUE", "FALSE","TRUE"),
@@ -492,38 +472,145 @@ CA <- rbind(CA, speaker_row)
 
 
 rep <- ggplot(data= CA, aes(x = y , y = x, fill = party)) +
-  geom_label(aes(x= y, y = x, label = representative), size = 2.3)+
+  geom_label(aes(x= y, y = x, label = representative), size = 2.5)+
   scale_fill_manual(values = c("white", "gray"),
                      limits = c("D", "R")) +
   theme_ggparliament() + 
   theme(legend.position = 'none') 
-comb <- cowplot::plot_grid(img, rep, ncol = 1)
-comb
-#ggsave(comb, file = "CA-gov-rep.png", width = 6, height = 3)
+cowplot::plot_grid(img, rep, ncol = 1)
 ```
 
 
+## The Ideological Mapping of American Legislatures [@shor2011ideological]
+Exploiting a survey taken by state and national legislature candidates in the United States Congress, Shor and McCarty [-@shor2011ideological] impute ideal points across state legislatures and over time. Building off an extensive body of literature on the spatial theory of voting in the United States Congress [@poole2000congress; @clinton2004statistical; @heckman1996linear], the authors construct an ideological map of American state legislatures. The updated data [@DVN/6QWX7Q_2018] contain latent ideal points for every state legislator from 1993 to 2016, a subset of which are plotted below. 
 
 
+```{r, fig.width=8, fig.height=10, fig.cap="Mapping American Legislatures, 2016", dpi = 300}
+shor_mccarty <- haven::read_dta("shor_mccartydata/shor mccarty 1993-2016 individual legislator data May 2018 release (Updated July 2018).dta")
+
+house16<- shor_mccarty %>% 
+  select(-contains("senate")) %>% 
+  select(-contains("sdistrict")) %>% 
+  select('name','party','st','st_id','np_score','house2016','hdistrict2016') %>% 
+  drop_na('house2016') %>% 
+  group_by(st) %>% 
+  arrange(np_score, .by_group = TRUE) %>% 
+  ungroup()
+
+
+basic <- shor_mccarty %>%
+  select(-contains("senate")) %>%
+  select(-contains("sdistrict")) %>%
+  select('name','party','st','st_id','np_score','house2016','hdistrict2016') %>%
+  drop_na(house2016) %>%
+  group_by(st) %>%
+  count(party) %>% 
+  ungroup() %>% 
+  split(.$st) %>%
+  map(~parliament_data(election_data =.,
+                       parl_rows = 5,
+                       type = 'semicircle',
+                       party_seats = .$n)) %>%
+  bind_rows()
+```
+
+```{r}
+two_filt <- house16 %>% 
+  filter(!st %in% c("AK", "DE", "NV", "NE", "WY", "AZ", 
+                    "OR",  "MD","TX","NY", "CT","ME",
+                    "MO","GA","PA","NH")) %>% 
+  group_by(st) %>%
+  arrange(np_score, .by_group = TRUE) %>%
+  ungroup()
+
+
+
+two <- basic %>%
+  filter(!st %in% c("AK", "DE", "NV", "NE", "WY", "AZ", 
+                    "OR",  "MD","TX","NY", "CT","ME",
+                    "MO","GA","PA","NH")) %>% 
+  group_by(st) %>%
+  count(party) %>%
+  droplevels() %>%
+  ungroup() %>% 
+  split(.$st) %>%
+  map(~parliament_data(election_data =.,
+                       parl_rows = 5,
+                       type = 'semicircle',
+                       party_seats = .$nn)) %>%
+  bind_rows() %>%
+  bind_cols(two_filt) 
+```
+
+```{r, fig.width=10, fig.height = 8,fig.pos="h", fig.cap="Mapping American Legislatures in 2016: ideal point estimates", dpi = 300}
+# Draw each page
+most<-   ggplot(two, aes(x, y, color = np_score)) +
+  geom_parliament_seats(size = 2) +
+  scale_color_gradient2(low = "#1c396e", high = "#ed1b35", mid = "#009de3", guide = 
+                         guide_colorbar(title.position = 'top', 
+                                        title = 'NPAT common space score', 
+                                        label.position = 'bottom', nbin = 80, 
+                                        draw.ulim = FALSE, draw.llim = FALSE, 
+                                        barheight = 1.5, barwidth = 40)) +
+  theme_ggparliament() +
+  theme(legend.position = 'top',
+        plot.caption = element_text(size = 10),
+        strip.text = element_text(face = "bold")) +
+    facet_wrap(~ st1, ncol = 5)
+most
+```
+
+
+## Gender Quotas 
+
+A broad literature in electoral systems focuses on gender quotas [@reynolds1999women; @tripp2008global; @krook2010quotas; @dahlerup2012impact; @schwindt2009making; @bush2011international; @hughes2011intersectionality]. Delineating different seats is something that `ggparliament` excels at. Looking at the Tanzanian parliament which has enforced gender quotas in conjunction with reserved seats for women, one can see that the number of women MPs has steadily increased as gender quotas increased from 20% (2000) to 30% (2005, 2010) and as the total number of parliamentarians grew over time. In 2000, the Tanzanian parliament was not to consist of more than 80% men [@tripp2008global]. Of course, not all women were elected; many were selected from party lists for seats specifically reserved for women. A visualization of the evolution of women in the Tanzanian parliament is below. 
+
+
+```{r, fig.width=8, fig.height=3, fig.cap = "Women in the Tanzanian Parliament (2000, 2005, 2010)", fig.pos="h", dpi = 300}
+tanzania <- read_csv("tanzania_data.csv") %>% 
+  split(.$year) %>% 
+  map(~parliament_data(election_data = .,
+                       parl_rows = 15,
+                       party_seats = .$seats, 
+                       type = 'classroom')) %>% 
+  bind_rows()
+
+
+ggplot(data = tanzania, aes(x, y, color = sex)) +
+  geom_parliament_seats(size = 2) +
+  geom_highlight_government(breakdown == "Women reserved seat", colour = '#66A5E5', size = 1.9) +
+  geom_overhang_seats(row_number() == 55) +
+  geom_overhang_seats(row_number() == 371) +
+  geom_overhang_seats(row_number() == 699) +
+  scale_color_manual(values = c("grey", "black"),
+                     limits = c("male", "female")) + 
+  labs(subtitle = "Quotas or special seats: women-reserved seats (blue), minimum quota met (hollow).",
+       caption = "Source: IPU, Tanzanian FEC",
+       color = NULL) +
+  facet_grid(~ year) + 
+  theme_ggparliament() + 
+  theme(legend.position = 'bottom') 
+#ggsave(last_plot(), height = 3, width = 8, file = "tanzania.png")
+```
 
 
 # Conclusion
 
-Blah blah
-Future direction, etc.
+The parliament plot allows political scientists to visualize election results and legislatures efficiently in `R`. It enhances our understanding of legislatures by providing a visual alternative to tables for descriptive data on elections and legislative bodies. I (along with Thomas Leeper and Rob Hickman) have written an `R` package that allows users to easily create parliament plots using `ggplot2` syntax, a computing language familiar to many political scientists. 
 
+They are, of course, not without limitations. In static form, parliament plots are restricting because they merely show descriptive results. As political science begins to embrace interactive graphics, this will change -- we already have interactive scripts for `ggparliament`embedded into the `R` package but they are presumably of little use for most political scientists right now. A fascinating use case would be to link each seat to a map which pans to the geographic area for a legislative district when hovering over a given seat in a legislative chamber. However, as it stands, `ggparliament` fills a niche in the data visualization field and political science by making legislative and election data easy and intuitive to visualize. 
+
+
+\newpage
 
 
 # References
 
-<div id="refs"></div>
+<div id="refs"></div> 
 
 # Appendix
-
 ## `R` package
-
 See https://CRAN.R-project.org/package=ggparliament. 
 
-## Paper GitHub repo
-
-https://github.com/zmeers/ggparliament_paper
+## GitHub repo
+See https://github.com/zmeers/ggparliament_paper
